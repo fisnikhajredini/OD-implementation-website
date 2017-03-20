@@ -13,6 +13,9 @@
 #include "opendavinci/odcore/base/KeyValueConfiguration.h"
 #include "opendavinci/odcore/data/Container.h"
 #include "opendavinci/odcore/data/TimeStamp.h"
+#include "opendavinci/odcore/wrapper/Mutex.h"
+#include "opendavinci/odcore/wrapper/MutexFactory.h"
+#include "opendavinci/generated/odcore/data/dmcp/ModuleStatistics.h"
 
 #include "Client.h"
 namespace automotive {
@@ -21,25 +24,45 @@ namespace automotive {
 		using namespace std;
 		using namespace odcore::base;
 		using namespace odcore::data;
+		using namespace odcore::wrapper;
+		using namespace odcore::data::dmcp;
 		//int m_clientUDP,m_clientTCP;
 		//struct sockaddr_in m_server_addr;
 		//struct hostent *server;
 		//char const* ip ="127.0.0.1";
 		//int portNum = 8872;
-		//socklen_t m;
-
-
+			//socklen_t m;
+		const char* p;
+		int length;
+		string cs;
 		Client::Client(const int32_t &argc, char **argv) :
 		TimeTriggeredConferenceClientModule(argc, argv,"client"),
 		m_clientUDP(),
 		m_clientTCP(),
-		m_server_addr()
+		m_server_addr(),
+		m_sentMessage(),
+		m_containerHandlerMutex()
 		{}
 
 		Client::~Client() {
         }
+        void Client::nextContainer(Container &c) {
+            if (c.getDataType() == odcore::data::dmcp::ModuleStatistics::ID()) {
+            	m_containerHandlerMutex -> lock();
+                // ModuleStatistics ms = c.getData<ModuleStatistics>();
+                stringstream ss;
+                ss << c;
+                m_sentMessage = ss.str();
+                m_containerHandlerMutex ->unlock();
+        		
+        	}
 
+        }
         void Client::setUp() {
+        	m_containerHandlerMutex = unique_ptr<odcore::wrapper::Mutex>(MutexFactory::createMutex());
+   //      	if (m_containerHandlerMutex.get() == NULL ){
+   //      		cerr << "Couldnt create MUTEX" <<endl;
+			// }
 			cout << "Setup started" << endl;
 			KeyValueConfiguration kv = getKeyValueConfiguration();
         	
@@ -64,7 +87,7 @@ namespace automotive {
 			
 
 			if (connect(m_clientTCP,(struct sockaddr *)&m_server_addr,sizeof(m_server_addr)) ==0){
-				cout << "Conecting TCP.." <<endl;
+				cout << "Connecting TCP.." <<endl;
 			}
   			
   			
@@ -92,19 +115,25 @@ namespace automotive {
         	close(m_clientUDP);
         	close(m_clientTCP);
         }
+
         odcore::data::dmcp::ModuleExitCodeMessage::ModuleExitCode Client::body() {
-        	
-			char buffers[256];
+        	//char buffers[256];
         	while (getModuleStateAndWaitForRemainingTimeInTimeslice() == odcore::data::dmcp::ModuleStateMessage::RUNNING) {
+        		Container ms = getKeyValueDataStore().get(ModuleStatistics::ID());
+        		nextContainer(ms);
+        		
+			
         		cout << "Input something to send" << endl;
         		
 
+
+				//sprintf (buffers, p);
             //send TCP and UDP
             //--------------------------------------------------------------//
-            	cin >> buffers;
-	  			sendto(m_clientUDP, buffers, strlen(buffers), 0, (struct sockaddr *)&m_server_addr, sizeof(m_server_addr));
+            	//cin >> buffers;
+	  			sendto(m_clientUDP, m_sentMessage.c_str(), m_sentMessage.length(), 0, (struct sockaddr *)&m_server_addr, sizeof(m_server_addr));
             	cout <<"Sent UDP"<< endl;
-            	sendto(m_clientTCP, buffers, strlen(buffers), 0, (struct sockaddr *)&m_server_addr, sizeof(m_server_addr));
+            	sendto(m_clientTCP, m_sentMessage.c_str(), m_sentMessage.length(), 0, (struct sockaddr *)&m_server_addr, sizeof(m_server_addr));
 	  			//write(m_clientTCP,buffer,bufferLength);
 	  			cout <<"Sent TCP"<< endl;
 

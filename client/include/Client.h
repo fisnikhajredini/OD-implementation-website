@@ -17,12 +17,12 @@
 #include "opendavinci/odcore/base/module/TimeTriggeredConferenceClientModule.h"
 #include "opendavinci/odcore/data/Container.h"
 #include <opendavinci/odcore/base/Thread.h>
-
+#include "opendavinci/odcore/wrapper/Mutex.h"
+class Mutex;
 namespace automotive {
     namespace miniature {
-
         using namespace std;
-
+        
 
 
         class Client : public odcore::base::module::TimeTriggeredConferenceClientModule{
@@ -37,6 +37,7 @@ namespace automotive {
             	Client(const int32_t &argc, char **argv);
 
                 virtual ~Client();
+                virtual void nextContainer(odcore::data::Container &c);
 
 
                 odcore::data::dmcp::ModuleExitCodeMessage::ModuleExitCode body();
@@ -45,9 +46,13 @@ namespace automotive {
                 virtual void setUp();
 
                 virtual void tearDown();
-            private:
                 int m_clientUDP,m_clientTCP;
+                
                 struct sockaddr_in m_server_addr;
+                string m_sentMessage;
+                
+                unique_ptr<odcore::wrapper::Mutex> m_containerHandlerMutex;
+               
         };
 
     }
